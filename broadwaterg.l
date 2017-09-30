@@ -81,6 +81,7 @@ COMMENT       ;.*
 
 {LETSTAR} {
   printTokenInfo( "LETSTAR", yytext );
+ beginScope();
   return LETSTAR;
 }
 
@@ -91,6 +92,7 @@ COMMENT       ;.*
 
 {LAMBDA} {
   printTokenInfo( "LAMBDA", yytext );
+  beginScope();
   return LAMBDA;
 }
 
@@ -190,6 +192,8 @@ COMMENT       ;.*
 }
 
 {IDENT} {
+  yylval.text = strdup( yytext );
+
   printTokenInfo( "IDENT", yytext );
   return IDENT;
 }

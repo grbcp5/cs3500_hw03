@@ -2,12 +2,23 @@
  
 #include <iostream>
 #include <stdio.h>
+#include <stack>
+#include "SymbolTable.h"
+#include "SymbolTableEntry.h"
 
 int numLines = 1;
 
 void printRule(const char *lhs, const char *rhs);
-int yyerror(const char *s);
+int yyerror( const char* error );
 void printTokenInfo(const char* tokenType, const char* lexeme);
+
+void beginScope();
+void endScope();
+
+bool findEntryInAnyScope( const string ident );
+void addToScope( const SYMBOL_TABLE_ENTRY entry );
+
+stack<SYMBOL_TABLE> scopeStack;
 
 extern "C" {
   int yyparse( void );
@@ -18,6 +29,12 @@ extern "C" {
 }
 
 %}
+
+%union {
+  char* text;
+}
+
+%type <text> IDENT
 
 /* Tokens */
 %token LETSTAR
@@ -72,7 +89,19 @@ START : EXPR {
 EXPR : CONST {
   printRule( "EXPR", "CONST" );
 } | IDENT {
+  string ident;
+  bool found;
+  
   printRule( "EXPR", "IDENT" );
+
+  ident = string( $1 );
+  found = findEntryInAnyScope( ident );
+
+  if( !found ) {
+    yyerror( "Undefined identifier" );
+    return 1;
+  }
+  
 } | LPAREN PARENTHESIZED_EXPR RPAREN {
   printRule( "EXPR", "( PARENTHESIZED_EXPR )" );
 }
@@ -115,22 +144,56 @@ IF_EXPR : IF EXPR EXPR EXPR {
 
 LET_EXPR : LETSTAR LPAREN ID_EXPR_LIST RPAREN EXPR {
   printRule( "LET_EXPR", "let* ( ID_EXPR_LIST ) EXPR" );
+
+  endScope();           
 }
 
 ID_EXPR_LIST : /* epsilon */ {
   printRule( "ID_EXPR_LIST", "EPSILON" );
 } | ID_EXPR_LIST LPAREN IDENT EXPR RPAREN {
+  string ident;
+  bool found;
+  
   printRule( "ID_EXPR_LIST", "ID_EXPR_LIST ( IDENT EXPR ) " );
+
+  ident = string( $3 );
+  found = scopeStack.top().findEntry( ident );
+
+  printf( "___Adding %s to symbol table\n", ident.c_str() );
+  if( found ) {
+    yyerror( "Multiply defined identifier" );
+    return 1;
+  } else {
+    addToScope( SYMBOL_TABLE_ENTRY( ident, UNDEFINED ) );  
+  }
 }
 
 LAMBDA_EXPR : LAMBDA LPAREN ID_LIST RPAREN EXPR {
   printRule( "LAMBDA_EXPR", "LAMBDA ( ID_LIST ) EXPR" );
+
+  endScope();
 }
 
 ID_LIST : /* epsilon */ {
   printRule( "ID_LIST", "EPSILON" );
 } | ID_LIST IDENT {
+  string ident;
+  bool found;
+
   printRule( "ID_LIST", "ID_LIST IDENT" );
+
+  ident = string( $2 );
+  found = scopeStack.top().findEntry( ident );
+  
+  printf( "___Adding %s to symbol table\n", ident.c_str() );
+  if( found ) {
+    yyerror( "Multiply defined identifier" );
+    return 1;
+  } else {
+    addToScope( SYMBOL_TABLE_ENTRY( ident, UNDEFINED ) );  
+  }
+
+
 }
 
 PRINT_EXPR : PRINT EXPR {
@@ -200,11 +263,49 @@ void printRule(const char *lhs, const char *rhs) {
 
 int yyerror(const char *s) {
   printf("Line %d: %s\n", numLines, s);
-return(1);
+  return(1);
 }
 
 void printTokenInfo(const char* tokenType, const char* lexeme) {
   printf("TOKEN: %-8s  LEXEME: %s\n", tokenType, lexeme);
+}
+
+void beginScope() {
+  scopeStack.push(SYMBOL_TABLE());
+  printf( "\n___Entering new scope...\n\n" );
+}
+
+bool findEntryInAnyScope( const string ident ) {
+  
+  bool found;
+  SYMBOL_TABLE st;
+
+  if( scopeStack.empty() ) {
+    return false;
+  }
+
+  found = scopeStack.top().findEntry( ident );
+
+  if( found ) {
+    return true;
+  } else {
+    st = scopeStack.top();
+    scopeStack.pop();
+    found = findEntryInAnyScope( ident );
+    scopeStack.push( st );
+    return ( found );
+  }
+
+}
+
+void addToScope( const SYMBOL_TABLE_ENTRY entry ) {
+  scopeStack.top().addEntry( entry );
+
+}
+
+void endScope() {
+  scopeStack.pop();
+  printf( "\n___Exiting scope...\n\n" );
 }
 
 int main() {

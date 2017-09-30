@@ -50,6 +50,7 @@ g++ *.tab.c -o a.out
 inputs=`ls sample_input --ignore-backups`
 for i in $inputs; do
   ./a.out < ./sample_input/$i > ./actual_output/$i.out
+#echo $i >> ./actual_output/$i.out
 
   diff ./actual_output/$i.out ./expected_output/$i.out > \
        ./reports/$i --ignore-space-change --ignore-case \
